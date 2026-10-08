@@ -12,6 +12,8 @@
     h1 { margin: 0 0 8px; font-size: clamp(26px, 6vw, 38px); }
     p { line-height: 1.7; }
     #game { display: block; width: 100%; height: auto; aspect-ratio: 640 / 720; background: #111; border-radius: 4px; cursor: pointer; outline: none; touch-action: none; }
+    #game:fullscreen { width: 100vw; height: 100vh; aspect-ratio: auto; object-fit: contain; border-radius: 0; background: #000; }
+    #game:-webkit-full-screen { width: 100vw; height: 100vh; aspect-ratio: auto; object-fit: contain; border-radius: 0; background: #000; }
     .buttons { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 14px; }
     button { padding: 12px 20px; border: 1px solid #00462a; border-radius: 4px; background: #00462a; color: white; font: inherit; cursor: pointer; }
     #restart { background: white; color: #00462a; }
@@ -33,8 +35,9 @@
     <div class="buttons">
       <button id="start" type="button">시작</button>
       <button id="restart" type="button">다시 시작</button>
+      <button id="fullscreen" type="button">전체화면 (F)</button>
     </div>
-    <p class="keys">방향 전환: WASD · 방향키 &nbsp;|&nbsp; 패링: Space &nbsp;|&nbsp; 공격이 오는 쪽을 보고 박자에 맞춰 패링! <strong>PERFECT</strong>만 보스에게 반사되고, GOOD은 막기만 합니다.</p>
+    <p class="keys">방향 전환: WASD · 방향키 &nbsp;|&nbsp; 패링: Space &nbsp;|&nbsp; 전체화면: F &nbsp;|&nbsp; 공격이 오는 쪽을 보고 박자에 맞춰 패링! <strong>PERFECT</strong>만 보스에게 반사되고, GOOD은 막기만 합니다.</p>
 
     <section class="guide" aria-labelledby="guide-title">
       <h2 id="guide-title">참가자 정보 사전 입력</h2>
@@ -80,6 +83,31 @@
     const DIR_NAME = ['↑', '→', '↓', '←'];
     const BOSS_X = W / 2;
     const FONT = '"Malgun Gothic", system-ui, sans-serif';
+
+    // ===== 보스 스프라이트 (assets/boss_sheet.png: 4x2 = 날개 펄럭임 8프레임, 입 위치를 앵커로 정렬됨) =====
+    // 이미지가 없거나 로드에 실패하면 기존 도형 보스로 대체된다.
+    const BS = { cols: 4, rows: 2, cw: 360, ch: 309, ax: 181, ay: 184, ds: 0.58 };
+    const FLAP_BEATS = [0, 4, 3, 2, 1.5];                             // 페이즈별 날갯짓 한 사이클(박)
+    const BOSS_TINT = [null, null, 'rgba(255,63,208,.30)', 'rgba(255,47,69,.38)', 'rgba(255,90,138,.45)'];
+    const BOSS_GLOW = ['', '#9b5de5', '#d04cff', '#ff4060', '#ff5a8a'];
+    const bossImg = typeof Image === 'function' ? new Image() : null;
+    let bossSheets = null;                                            // [페이즈] 색조 시트 + white(피격)
+    function makeSheet(color) {
+      const c = document.createElement('canvas'); c.width = bossImg.naturalWidth; c.height = bossImg.naturalHeight;
+      const x = c.getContext('2d'); x.drawImage(bossImg, 0, 0);
+      if (color) { x.globalCompositeOperation = 'source-atop'; x.fillStyle = color; x.fillRect(0, 0, c.width, c.height); }
+      return c;
+    }
+    if (bossImg) {
+      bossImg.onload = () => {
+        try {
+          bossSheets = BOSS_TINT.map(c => makeSheet(c));
+          bossSheets.white = makeSheet('rgba(255,255,255,.9)');
+        } catch (e) { console.warn('보스 스프라이트 준비 실패, 도형 보스로 대체', e); bossSheets = null; }
+      };
+      bossImg.onerror = () => console.warn('assets/boss_sheet.png 로드 실패: 도형 보스로 대체');
+      bossImg.src = 'assets/boss_sheet.png';
+    }
 
     // 고정 패턴(랜덤 생성 없음)
     const ADV_DIRS = [0, 1, 3, 2];
@@ -203,12 +231,29 @@
       o.connect(gn); gn.connect(AC.destination); o.start(t0); o.stop(t0 + d);
     }
 
+    // ===== 전체화면 (캔버스를 화면 가득, 비율 유지. Esc 로 해제) =====
+    const fsBtn = document.getElementById('fullscreen');
+    const canFS = !!(cv.requestFullscreen || cv.webkitRequestFullscreen);
+    if (!canFS) fsBtn.hidden = true;           // 지원 안 하는 브라우저(일부 모바일)에서는 버튼 숨김
+    function toggleFullscreen() {
+      if (!canFS) return;
+      if (document.fullscreenElement || document.webkitFullscreenElement) {
+        (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+      } else {
+        const p = (cv.requestFullscreen || cv.webkitRequestFullscreen).call(cv);
+        if (p && p.catch) p.catch(err => console.warn('전체화면 전환 실패', err));
+      }
+      cv.focus();
+    }
+    fsBtn.addEventListener('click', e => { e.currentTarget.blur(); toggleFullscreen(); });
+
     // ===== 입력 =====
     const FACE_KEYS = { KeyW: 0, ArrowUp: 0, KeyD: 1, ArrowRight: 1, KeyS: 2, ArrowDown: 2, KeyA: 3, ArrowLeft: 3 };
     addEventListener('keydown', e => {
       const k = e.code;
       if (k === 'Space' || (state !== 'win' && state !== 'lose' && k in FACE_KEYS)) e.preventDefault();   // 스크롤/포커스된 버튼 클릭 방지
       if (e.repeat) return;
+      if (k === 'KeyF') { toggleFullscreen(); return; }
       if (state === 'title') { if (k === 'Space' || k === 'Enter') start(); return; }
       if (state === 'play') {
         if (k in FACE_KEYS) S.face = FACE_KEYS[k];
@@ -224,7 +269,7 @@
 
     // ===== 유틸 =====
     const bossScale = t => t < DODGE ? 0.3 : Math.min(1, 0.3 + 0.7 * (t - DODGE));
-    const bossY = t => 75 + 30 * (bossScale(t) - 0.3) / 0.7;
+    const bossY = t => 105 + 51 * (bossScale(t) - 0.3) / 0.7;     // 보스 스프라이트의 앵커(입) 높이
     function placeBullet(b, t) {
       let u = (t - b.spawnT) / (b.hitT - b.spawnT);
       if (b.ease) u = u <= 0.6 ? 0.3 * (u / 0.6) : 0.3 + 0.7 * (u - 0.6) / 0.4;   // 페인트: 느리게 오다가 막판에 가속
@@ -347,7 +392,7 @@
       for (const b of S.bullets) {
         if (b.state === 'done') continue;
         if (b.state === 'reflect') {
-          const k = (t - b.rt0) / 0.35, by = bossY(t) + 20;
+          const k = (t - b.rt0) / 0.35, by = bossY(t) - 15;
           if (k >= 1) {
             b.state = 'done';
             S.bossHp = Math.max(0, S.bossHp - b.dmg);
@@ -438,27 +483,21 @@
       g.strokeStyle = 'rgba(255,255,255,.08)'; g.lineWidth = 2;
       g.beginPath(); g.moveTo(0, CY); g.lineTo(W, CY); g.stroke();
 
-      // 공격 예고: 오는 방향에 화살표와 선
-      let charging = false;
-      for (const p of S.pending) {
-        const lead = p.spawnT - t, lim = p.kind === 's' || p.flip || p.ease ? 1.0 : 0.7;
-        if (lead > lim) continue;
-        if (p.kind === 's') charging = true;
-        const sd = p.flip ? p.from : p.dir;        // 반전탄은 처음 오는 쪽에 예고, 반대편엔 흐린 화살표
-        if (p.flip) outlineText(DIR_NAME[p.dir], CX + DIRS[p.dir][0] * (SPAWN_D - 26), CY + DIRS[p.dir][1] * (SPAWN_D - 26), 'rgba(255,210,58,.35)', 30);
-        const dx = DIRS[sd][0], dy = DIRS[sd][1];
-        const sx = CX + dx * SPAWN_D, sy = CY + dy * SPAWN_D;
-        const col = p.flip && p.ease ? '255,90,209' : p.flip ? '255,210,58' : p.ease ? '176,107,255' : p.kind === 's' ? '47,140,255' : '255,70,90';
-        g.strokeStyle = `rgba(${col},${0.45 + 0.4 * Math.sin(t * 30)})`; g.lineWidth = p.kind === 's' ? 5 : 3;
-        if (p.kind === 's') g.setLineDash([10, 8]);
-        g.beginPath(); g.moveTo(sx, sy); g.lineTo(CX + dx * R0, CY + dy * R0); g.stroke(); g.setLineDash([]);
-        outlineText(DIR_NAME[sd], sx - dx * 26, sy - dy * 26, p.flip && p.ease ? '#ff5ad1' : p.flip ? '#ffd23a' : p.ease ? '#b98cff' : p.kind === 's' ? '#5aa8ff' : '#ff6b7e', 30);
-      }
-
-      // 보스
+      // 보스 (예고선이 보스에 가려지지 않도록 예고보다 먼저 그린다)
+      const charging = S.pending.some(p => p.kind === 's' && p.spawnT - t <= 1.0);
       const sc = bossScale(t), by = bossY(t), bossPhase = t >= DODGE;
       const pulse = bossPhase ? 1 + 0.04 * (1 - ((t / SPB) % 1)) : 1;
       const flashing = t < S.bossFlashUntil;
+      if (bossSheets) {                                       // 이미지 보스: 박자에 맞춰 날갯짓, 페이즈마다 색/속도 변화
+        const ph = bossPhase ? phaseOf(S.bossHp) : 1;
+        const cb = FLAP_BEATS[ph], fr = Math.floor(((t / SPB) % cb) / cb * (BS.cols * BS.rows));
+        const bob = 4 * Math.sin(t * 3);
+        g.save(); g.translate(BOSS_X, by + bob); g.scale(sc * pulse, sc * pulse);
+        g.shadowColor = charging && bossPhase ? '#3f9bff' : BOSS_GLOW[ph]; g.shadowBlur = charging && bossPhase ? 36 : 12 + 5 * ph;
+        g.drawImage(flashing ? bossSheets.white : bossSheets[ph], (fr % BS.cols) * BS.cw, Math.floor(fr / BS.cols) * BS.ch, BS.cw, BS.ch,
+          -BS.ax * BS.ds, -BS.ay * BS.ds, BS.cw * BS.ds, BS.ch * BS.ds);
+        g.restore();
+      } else {
       g.save(); g.translate(BOSS_X, by); g.scale(sc * pulse, sc * pulse);
       if (charging && bossPhase) { g.shadowColor = '#3f9bff'; g.shadowBlur = 30; }
       g.fillStyle = flashing ? '#ffffff' : (bossPhase ? ['', '#5a2a8a', '#8a2a6a', '#9a1f2a', '#c01040'][phaseOf(S.bossHp)] : '#2a2140');
@@ -470,6 +509,22 @@
       g.fillRect(-50, -20, 28, 18); g.fillRect(22, -20, 28, 18);
       g.fillRect(-30, 20, 60, 8);
       g.restore();
+      }
+
+      // 공격 예고: 오는 방향에 화살표와 선
+      for (const p of S.pending) {
+        const lead = p.spawnT - t, lim = p.kind === 's' || p.flip || p.ease ? 1.0 : 0.7;
+        if (lead > lim) continue;
+        const sd = p.flip ? p.from : p.dir;        // 반전탄은 처음 오는 쪽에 예고, 반대편엔 흐린 화살표
+        if (p.flip) outlineText(DIR_NAME[p.dir], CX + DIRS[p.dir][0] * (SPAWN_D - 26), CY + DIRS[p.dir][1] * (SPAWN_D - 26), 'rgba(255,210,58,.35)', 30);
+        const dx = DIRS[sd][0], dy = DIRS[sd][1];
+        const sx = CX + dx * SPAWN_D, sy = CY + dy * SPAWN_D;
+        const col = p.flip && p.ease ? '255,90,209' : p.flip ? '255,210,58' : p.ease ? '176,107,255' : p.kind === 's' ? '47,140,255' : '255,70,90';
+        g.strokeStyle = `rgba(${col},${0.45 + 0.4 * Math.sin(t * 30)})`; g.lineWidth = p.kind === 's' ? 5 : 3;
+        if (p.kind === 's') g.setLineDash([10, 8]);
+        g.beginPath(); g.moveTo(sx, sy); g.lineTo(CX + dx * R0, CY + dy * R0); g.stroke(); g.setLineDash([]);
+        outlineText(DIR_NAME[sd], sx - dx * 26, sy - dy * 26, p.flip && p.ease ? '#ff5ad1' : p.flip ? '#ffd23a' : p.ease ? '#b98cff' : p.kind === 's' ? '#5aa8ff' : '#ff6b7e', 30);
+      }
 
       // 판정 링 (이 위치에 탄이 닿는 순간이 박자)
       g.strokeStyle = 'rgba(255,255,255,.28)'; g.lineWidth = 2; g.setLineDash([5, 7]);
@@ -521,9 +576,9 @@
       outlineText(remain.toFixed(1) + 's', W / 2, 24, remain < 15 ? '#ff6b6b' : '#ffffff', 24);
       if (S.combo > 0) outlineText('PERFECT x' + S.combo, W - 14, 24, '#ffd34d', 20, 'right');
       if (bossPhase) {
-        g.fillStyle = '#000a'; g.fillRect(120, 46, 400, 14);
-        g.fillStyle = '#ff4d6d'; g.fillRect(122, 48, 396 * S.bossHp / BOSSHP, 10);
-        outlineText('BOSS ' + S.bossHp + '/' + BOSSHP + ' · PHASE ' + phaseOf(S.bossHp), W / 2, 74, '#fff', 14);
+        g.fillStyle = '#000a'; g.fillRect(120, 38, 400, 14);
+        g.fillStyle = '#ff4d6d'; g.fillRect(122, 40, 396 * S.bossHp / BOSSHP, 10);
+        outlineText('BOSS ' + S.bossHp + '/' + BOSSHP + ' · PHASE ' + phaseOf(S.bossHp), W / 2, 45, '#fff', 11);
         if (S.firstParried) outlineText('PERFECT만 보스에게 반사!', W / 2, H - 22, '#9fdfe0', 16);
       }
       // 구간 안내
@@ -531,7 +586,7 @@
         outlineText('1구간 · 회피/적응', W / 2, 60, '#ddd', 18);
         outlineText('붉은 탄이 오는 쪽으로 방향키 → 박자에 맞춰 SPACE', W / 2, 300, '#ff9aa6', 20);
       } else if (!S.firstParried && t < LEARN_END) {
-        outlineText('2구간 · 패링 학습', W / 2, 190, '#3f9bff', 18);
+        outlineText('2구간 · 패링 학습', W / 2, 262, '#3f9bff', 18);
         outlineText('큰 파란 탄 쪽을 보고, 링에 닿을 때 SPACE', W / 2, 300, '#3f9bff', 22);
         outlineText('PERFECT로 막으면 보스에게 반사된다', W / 2, 330, '#ffd34d', 18);
       }
