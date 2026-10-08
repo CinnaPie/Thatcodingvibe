@@ -59,13 +59,16 @@
     const BPM = 120, SPB = 60 / BPM;          // 한 박 길이(초)
     const DODGE = 5;                          // 1구간: 회피/적응(초)
     const LEARN_END = 10;                     // 2구간: 패링 학습(초) — 이후 본편
-    const TOTAL = 90;                         // 전체 제한 시간(초)
-    const MAXHP = 5, BOSSHP = 40;
+    const TOTAL = 120;                        // 전체 제한 시간(초)
+    const MAXHP = 5, BOSSHP = 60;
     const PERFECT_WIN = 0.10, GOOD_WIN = 0.22, FIRST_WIN = 0.25;
     const NORMAL_TRAVEL = 1.2, SPECIAL_TRAVEL = 1.6, FIRST_TRAVEL = 3.0, HEAL_TRAVEL = 2.8;
     const DMG_NORMAL = 1, DMG_SPECIAL = 2;    // PERFECT 반사 시 보스 피해
     const HEAL_GAP = 18, HEAL_MAX = 3;
     const HITSTOP = 0.07;
+    const LOCK_WHIFF = 0.6;                   // 헛스윙/너무 이른 입력 → 패링 불가 시간(연타 방지)
+    const LOCK_MASH = 0.6;                    // 경직 중 또 누르면 이 시간만큼 경직 연장
+    const LOCK_HIT = 0.15;                    // 패링 성공 직후 짧은 재입력 대기
     const MUSIC_URL = '';                     // 선택: 음악 파일 경로를 넣으면 같은 시계로 재생
 
     // ===== 레이아웃 =====
@@ -114,9 +117,9 @@
     }
 
     // ===== 보스 HP 기반 페이즈 =====
-    // 1: HP 2/3 초과 / 2: 1/3 초과 / 3: 그 이하. 페이즈가 오를수록 탄이 빨라지고 새 패턴이 추가된다.
-    const phaseOf = hp => hp > BOSSHP * 2 / 3 ? 1 : hp > BOSSHP / 3 ? 2 : 3;
-    const PHASE_NAME = ['', '', 'PHASE 2 · 가속!', 'PHASE 3 · 폭주!'];
+    // 보스 HP를 4등분: 1페이즈(100~75%) / 2(75~50%) / 3(50~25%) / 4(25~0%). 페이즈가 오를수록 탄이 빨라지고 새 탄이 늘어난다.
+    const phaseOf = hp => hp > BOSSHP * 3 / 4 ? 1 : hp > BOSSHP / 2 ? 2 : hp > BOSSHP / 4 ? 3 : 4;
+    const PHASE_NAME = ['', '', 'PHASE 2 · 가속!', 'PHASE 3 · 폭주!', 'PHASE 4 · 최종 결전!'];
     const mod4 = x => ((x % 4) + 4) % 4;
 
     function ev(kind, dir, beat, travel, extra) {   // 현재 패턴 기준 beat 박 뒤에 닿는 탄 예약
@@ -127,23 +130,34 @@
     function genPattern() {
       const ph = phaseOf(S.bossHp), k = S.gc++;
       const d = SP_DIRS[k % SP_DIRS.length], dn = N_DIRS[k % N_DIRS.length];
-      const nt = [0, 1.2, 1.05, 0.9][ph], st = [0, 1.6, 1.4, 1.2][ph];
+      const nt = [0, 1.2, 1.05, 0.9, 0.8][ph], st = [0, 1.6, 1.4, 1.2, 1.05][ph];
+      // 새 탄 헬퍼: E=페인트(느리다 가속, 보라), F=반전(돌아서 반대편에서 옴, 주황), EF=복합(분홍)
+      const et = ph === 2 ? 1.9 : 1.6, est = ph === 2 ? 2.4 : 2.0, ft = ph === 3 ? 1.8 : 1.6;
+      const E = (kind, dir, beat) => ev(kind, dir, beat, kind === 's' ? est : et, { ease: true });
+      const F = (kind, dir, beat) => ev(kind, dir, beat, ft, { flip: true, from: dir + 2 });
+      const EF = (kind, dir, beat) => ev(kind, dir, beat, 2.4, { ease: true, flip: true, from: dir + 2 });
       let len = 4;
       if (ph === 1) {                              // 기본: 특수탄 + 중간 일반탄, 4번째마다 휴식
         ev('s', d, 0, st); ev('n', dn, 2, nt);
         if (k % 4 === 3) { ev('n', N_DIRS[(k + 5) % N_DIRS.length], 6, nt); len = 8; }
-      } else if (ph === 2) {
+      } else if (ph === 2) {                       // 새 탄 = 페인트(보라) 약 절반
         const v = S.p2++ % 4;
-        if (v === 0) { ev('n', d, 0, nt); ev('n', d + 2, 1, nt); ev('s', dn, 3, st); }                       // 양방향 쌍탄
-        else if (v === 1) { ev('n', d, 0, nt); ev('n', d + 1, 1, nt); ev('n', d + 2, 2, nt); ev('s', dn, 4, st); len = 6; }  // 회전 연타
-        else if (v === 2) { ev('s', d, 0, st); ev('n', dn, 1.5, nt); ev('n', dn + 2, 2.5, nt); }             // 특수탄 뒤 급습
-        else { ev('s', d, 0, 2.2, { ease: true }); ev('n', dn, 2, nt); ev('n', dn + 2, 3, nt); }              // 페인트(보라: 느리다가 막판에 가속)
-      } else {
+        if (v === 0) { E('n', d, 0); ev('n', d + 2, 1, nt); ev('s', dn, 3, st); }                                       // 쌍탄
+        else if (v === 1) { ev('n', d, 0, nt); E('n', d + 1, 1); ev('n', d + 2, 2, nt); E('s', dn, 4); len = 6; }       // 회전 연타
+        else if (v === 2) { E('s', d, 0); ev('n', dn, 1.5, nt); E('n', dn + 2, 2.5); }                                  // 급습
+        else { E('s', d, 3); ev('n', d + 1, 0, nt); E('n', d + 3, 1); ev('n', d + 2, 2, nt); E('n', dn, 4.5); len = 6; } // 견제
+      } else if (ph === 3) {                       // 새 탄 = 반전(주황) 약 절반
         const v = S.p3++ % 4;
-        if (v === 0) { for (let i = 0; i < 4; i++) ev('n', d + i, i, nt); ev('s', dn, 5, st); len = 6; }     // 소용돌이
-        else if (v === 1) { ev('n', d + 2, 0, 1.8, { flip: true, from: d }); ev('s', dn, 2, st); ev('n', dn + 2, 3, nt); } // 반전탄(주황: 돌아서 반대편에서 옴)
-        else if (v === 2) { ev('s', d, 0, st); ev('s', d + 1, 1.5, st); ev('n', dn, 3, nt); }                // 더블 특수탄
-        else { ev('n', d, 0, nt); ev('n', d + 2, 1, nt); ev('n', d + 1, 2, nt); ev('n', d + 3, 3, nt); ev('s', dn + 2, 5, 1.8, { flip: true, from: dn }); len = 6; } // 지그재그 + 반전 특수탄
+        if (v === 0) { ev('n', d, 0, nt); F('n', d + 1, 1); ev('n', d + 2, 2, nt); F('n', d + 3, 3); ev('s', dn, 5, st); len = 6; } // 소용돌이
+        else if (v === 1) { F('n', d, 0); ev('s', dn, 2, st); F('n', dn + 2, 3); }                                      // 반전 연타
+        else if (v === 2) { F('s', d, 0); ev('s', d + 1, 1.5, st); ev('n', dn, 3, nt); }                                // 더블 특수탄
+        else { ev('n', d, 0, nt); F('n', d + 2, 1); ev('n', d + 1, 2, nt); F('n', d + 3, 3); F('s', dn, 5); len = 6; }  // 지그재그
+      } else {                                     // 4페이즈: 페인트 + 반전 + 복합탄, 가장 빠름
+        const v = S.p4++ % 4;
+        if (v === 0) { F('n', d, 0); ev('n', d + 1, 1, nt); F('n', d + 2, 2); ev('n', d + 3, 3, nt); E('s', dn, 5); len = 6; }
+        else if (v === 1) { EF('s', d, 0); ev('n', d + 1, 1.5, nt); E('n', d + 3, 2.5); ev('n', dn, 3.5, nt); len = 5; }
+        else if (v === 2) { ev('n', d, 0, nt); E('n', d + 2, 1); F('n', d + 1, 2); ev('n', d + 3, 3, nt); ev('s', dn, 5, st); len = 7; }
+        else { E('s', d, 0); E('s', d + 2, 1.5); ev('n', d + 1, 2.5, nt); F('n', d + 3, 3.5); len = 5; }
       }
       if (ph !== S.genPhase) { S.genPhase = ph; S.nextBase += 2 * SPB; }      // 페이즈가 바뀌면 숨 돌릴 틈
       S.nextBase += len * SPB;
@@ -154,9 +168,9 @@
       const sch = buildSchedule();
       S = {
         hp: MAXHP, bossHp: BOSSHP, combo: 0, maxCombo: 0, perfects: 0, goods: 0,
-        face: 0, invuln: 0, parryAt: -9, lastPress: -9,
+        face: 0, invuln: 0, parryAt: -9, lockUntil: 0, lockText: -9,
         bullets: [], texts: [], parts: [], pending: sch.list, nextBase: sch.nextBase,
-        gc: 1, p2: 0, p3: 0, genPhase: 1, phaseShown: 1,
+        gc: 1, p2: 0, p3: 0, p4: 0, genPhase: 1, phaseShown: 1,
         flash: 0, shake: 0, bossFlashUntil: 0, redFlash: 0, scroll: 0,
         healCount: 0, lastHeal: -99, firstParried: false, lastBeat: -1, endT: 0
       };
@@ -193,7 +207,7 @@
     const FACE_KEYS = { KeyW: 0, ArrowUp: 0, KeyD: 1, ArrowRight: 1, KeyS: 2, ArrowDown: 2, KeyA: 3, ArrowLeft: 3 };
     addEventListener('keydown', e => {
       const k = e.code;
-      if (state !== 'win' && state !== 'lose' && (k === 'Space' || k in FACE_KEYS)) e.preventDefault();
+      if (k === 'Space' || (state !== 'win' && state !== 'lose' && k in FACE_KEYS)) e.preventDefault();   // 스크롤/포커스된 버튼 클릭 방지
       if (e.repeat) return;
       if (state === 'title') { if (k === 'Space' || k === 'Enter') start(); return; }
       if (state === 'play') {
@@ -203,9 +217,10 @@
       }
       if ((k === 'Enter' || k === 'KeyR') && realTime() - endReal > 0.7) start();
     });
+    addEventListener('keyup', e => { if (e.code === 'Space') e.preventDefault(); });
     cv.addEventListener('pointerdown', () => { if (state === 'title' || ((state === 'win' || state === 'lose') && realTime() - endReal > 0.7)) start(); cv.focus(); });
-    document.getElementById('start').addEventListener('click', start);
-    document.getElementById('restart').addEventListener('click', start);
+    document.getElementById('start').addEventListener('click', e => { e.currentTarget.blur(); start(); });
+    document.getElementById('restart').addEventListener('click', e => { e.currentTarget.blur(); start(); });
 
     // ===== 유틸 =====
     const bossScale = t => t < DODGE ? 0.3 : Math.min(1, 0.3 + 0.7 * (t - DODGE));
@@ -252,8 +267,12 @@
     // ===== 패링 (바라보는 방향의 공격만 막을 수 있다. PERFECT만 보스에게 반사) =====
     function parry() {
       const t = now();
-      if (t - S.lastPress < 0.25) return;          // 연타 방지
-      S.lastPress = t; S.parryAt = t;
+      if (t < S.lockUntil) {                       // 경직 중 입력 → 연타하면 경직이 계속 연장된다
+        S.lockUntil = t + LOCK_MASH;
+        if (t - S.lockText > 0.4) { S.lockText = t; addText('경직!', CX, CY + 110, '#ff8a8a', 24, 0.5, t); tone(150, 0.06, 'square', 0.04); }
+        return;
+      }
+      S.parryAt = t;
       let best = null, bestD = 9;
       for (const b of S.bullets) {
         if (b.state !== 'fly' || b.dir !== S.face) continue;
@@ -265,6 +284,7 @@
         if (b.kind === 'h') {                       // 회복 탄: 튕겨 사라지고 회복되지 않는다
           b.state = 'done'; burst(px, py, '#7dff9a', 8, t);
           addText('BLOCKED', CX, CY + 110, '#9bd6a8', 22, 0.5, t); tone(300, 0.1, 'square', 0.06);
+          S.lockUntil = t + LOCK_HIT;
           return;
         }
         const perfect = bestD <= (b.first ? FIRST_WIN : PERFECT_WIN);
@@ -282,15 +302,14 @@
           addText('GOOD (막기만)', CX, CY + 110, '#7ff5ff', 30, 0.7, t);
           tone(700, 0.12, 'triangle', 0.09);
         }
+        S.lockUntil = t + LOCK_HIT;
         return;
       }
-      // 너무 일찍 눌렀을 때
-      for (const b of S.bullets) {
-        if (b.state === 'fly' && b.dir === S.face && b.kind !== 'h' && b.hitT - t > GOOD_WIN && b.hitT - t < 0.7) {
-          addText('EARLY', CX, CY + 110, '#ffb36b', 24, 0.5, t); tone(200, 0.08, 'square', 0.05); return;
-        }
-      }
-      tone(500, 0.05, 'sine', 0.03);               // 헛스윙
+      // 아무것도 못 막았다 → 헛스윙: 일정 시간 패링 불가
+      S.lockUntil = t + LOCK_WHIFF;
+      const early = S.bullets.some(b => b.state === 'fly' && b.dir === S.face && b.kind !== 'h' && b.hitT - t > GOOD_WIN && b.hitT - t < 0.7);
+      addText(early ? 'EARLY' : 'WHIFF', CX, CY + 110, '#ffb36b', 24, 0.5, t);
+      tone(200, 0.1, 'square', 0.05);
     }
 
     // ===== 업데이트 =====
@@ -303,7 +322,7 @@
         const ph = phaseOf(S.bossHp);
         if (ph > S.phaseShown) {
           S.phaseShown = ph; S.flash = Math.max(S.flash, 0.4); S.shake = 10;
-          addText(PHASE_NAME[ph], W / 2, 250, ph === 2 ? '#ffb36b' : '#ff5a5a', 44, 1.6, t);
+          addText(PHASE_NAME[ph], W / 2, 250, ['', '', '#ffb36b', '#ff5a5a', '#ff5ad1'][ph], 44, 1.6, t);
           tone(110, 0.5, 'sawtooth', 0.12, 220);
         }
       }
@@ -372,22 +391,35 @@
       g.fillStyle = color; g.fillText(txt, x, y);
     }
 
+    // 탄 모양/색: 붉은 일반탄만 마름모, 나머지(파랑·보라·노랑·분홍·초록)는 모두 원
+    function bulletColor(b) {
+      if (b.kind === 'h') return '#35d06a';                          // 초록: 회복
+      if (b.flip && b.ease) return '#ff5ad1';                        // 분홍: 복합
+      if (b.flip) return '#ffd23a';                                  // 노랑: 반전
+      if (b.ease) return '#b06bff';                                  // 보라: 페인트
+      return b.kind === 's' ? '#2f8cff' : '#ff2f45';                 // 파랑: 특수 / 빨강: 일반
+    }
     function drawBullet(b, t) {
       g.save(); g.translate(b.x, b.y);
-      if (b.kind === 'n') {                       // 붉은 마름모
-        g.rotate(Math.PI / 4); g.fillStyle = b.flip ? '#ff9a2e' : '#ff2f45'; g.fillRect(-12, -12, 24, 24);
-        g.strokeStyle = b.flip ? '#ffe0b3' : '#ffc3c9'; g.lineWidth = 2; g.strokeRect(-12, -12, 24, 24);
-      } else if (b.kind === 's') {                // 청록 큰 원 + 금색 링
-        const reflect = b.state === 'reflect';
-        const col = b.flip ? '#ff9a2e' : b.ease ? '#c77dff' : '#1fe5e0';   // 반전탄 주황 / 페인트 보라
+      const reflect = b.state === 'reflect';
+      const col = bulletColor(b);
+      if (b.kind === 'n' && !b.flip && !b.ease) {  // 붉은 마름모 (일반탄)
+        g.rotate(Math.PI / 4); g.fillStyle = col; g.fillRect(-12, -12, 24, 24);
+        g.strokeStyle = '#ffc3c9'; g.lineWidth = 2; g.strokeRect(-12, -12, 24, 24);
+      } else if (b.kind === 'h') {                // 초록 원 + 십자 (회복)
+        g.fillStyle = col; g.shadowColor = col; g.shadowBlur = 12;
+        g.beginPath(); g.arc(0, 0, 13, 0, 7); g.fill(); g.shadowBlur = 0;
+        g.fillStyle = '#eafff0'; g.fillRect(-2.5, -8, 5, 16); g.fillRect(-8, -2.5, 16, 5);
+      } else if (b.kind === 's') {                // 큰 원 + 금색 링 (특수탄)
         g.fillStyle = reflect ? '#ffe27a' : col; g.shadowColor = reflect ? '#ffd34d' : col; g.shadowBlur = 18;
         g.beginPath(); g.arc(0, 0, 22, 0, 7); g.fill();
         g.shadowBlur = 0; g.strokeStyle = '#ffd34d'; g.lineWidth = 4 + 2 * Math.sin(t * 12);
         g.beginPath(); g.arc(0, 0, 27, 0, 7); g.stroke();
-      } else {                                    // 초록 십자 오브
-        g.fillStyle = '#35d06a'; g.shadowColor = '#35d06a'; g.shadowBlur = 12;
-        g.beginPath(); g.arc(0, 0, 13, 0, 7); g.fill(); g.shadowBlur = 0;
-        g.fillStyle = '#eafff0'; g.fillRect(-2.5, -8, 5, 16); g.fillRect(-8, -2.5, 16, 5);
+      } else {                                    // 작은 원 (페인트/반전/복합 일반탄)
+        g.fillStyle = reflect ? '#ffe27a' : col; g.shadowColor = reflect ? '#ffd34d' : col; g.shadowBlur = 12;
+        g.beginPath(); g.arc(0, 0, 14, 0, 7); g.fill();
+        g.shadowBlur = 0; g.strokeStyle = 'rgba(255,255,255,.85)'; g.lineWidth = 2;
+        g.beginPath(); g.arc(0, 0, 14, 0, 7); g.stroke();
       }
       g.restore();
     }
@@ -409,18 +441,18 @@
       // 공격 예고: 오는 방향에 화살표와 선
       let charging = false;
       for (const p of S.pending) {
-        const lead = p.spawnT - t, lim = p.kind === 's' || p.flip ? 1.0 : 0.7;
+        const lead = p.spawnT - t, lim = p.kind === 's' || p.flip || p.ease ? 1.0 : 0.7;
         if (lead > lim) continue;
         if (p.kind === 's') charging = true;
         const sd = p.flip ? p.from : p.dir;        // 반전탄은 처음 오는 쪽에 예고, 반대편엔 흐린 화살표
-        if (p.flip) outlineText(DIR_NAME[p.dir], CX + DIRS[p.dir][0] * (SPAWN_D - 26), CY + DIRS[p.dir][1] * (SPAWN_D - 26), 'rgba(255,154,46,.35)', 30);
+        if (p.flip) outlineText(DIR_NAME[p.dir], CX + DIRS[p.dir][0] * (SPAWN_D - 26), CY + DIRS[p.dir][1] * (SPAWN_D - 26), 'rgba(255,210,58,.35)', 30);
         const dx = DIRS[sd][0], dy = DIRS[sd][1];
         const sx = CX + dx * SPAWN_D, sy = CY + dy * SPAWN_D;
-        const col = p.flip ? '255,154,46' : p.kind === 's' ? '31,229,224' : '255,70,90';
+        const col = p.flip && p.ease ? '255,90,209' : p.flip ? '255,210,58' : p.ease ? '176,107,255' : p.kind === 's' ? '47,140,255' : '255,70,90';
         g.strokeStyle = `rgba(${col},${0.45 + 0.4 * Math.sin(t * 30)})`; g.lineWidth = p.kind === 's' ? 5 : 3;
         if (p.kind === 's') g.setLineDash([10, 8]);
         g.beginPath(); g.moveTo(sx, sy); g.lineTo(CX + dx * R0, CY + dy * R0); g.stroke(); g.setLineDash([]);
-        outlineText(DIR_NAME[sd], sx - dx * 26, sy - dy * 26, p.flip ? '#ff9a2e' : p.kind === 's' ? '#1fe5e0' : '#ff6b7e', 30);
+        outlineText(DIR_NAME[sd], sx - dx * 26, sy - dy * 26, p.flip && p.ease ? '#ff5ad1' : p.flip ? '#ffd23a' : p.ease ? '#b98cff' : p.kind === 's' ? '#5aa8ff' : '#ff6b7e', 30);
       }
 
       // 보스
@@ -428,13 +460,13 @@
       const pulse = bossPhase ? 1 + 0.04 * (1 - ((t / SPB) % 1)) : 1;
       const flashing = t < S.bossFlashUntil;
       g.save(); g.translate(BOSS_X, by); g.scale(sc * pulse, sc * pulse);
-      if (charging && bossPhase) { g.shadowColor = '#1fe5e0'; g.shadowBlur = 30; }
-      g.fillStyle = flashing ? '#ffffff' : (bossPhase ? ['', '#5a2a8a', '#8a2a6a', '#9a1f2a'][phaseOf(S.bossHp)] : '#2a2140');
+      if (charging && bossPhase) { g.shadowColor = '#3f9bff'; g.shadowBlur = 30; }
+      g.fillStyle = flashing ? '#ffffff' : (bossPhase ? ['', '#5a2a8a', '#8a2a6a', '#9a1f2a', '#c01040'][phaseOf(S.bossHp)] : '#2a2140');
       g.fillRect(-80, -50, 160, 100);
       g.beginPath(); g.moveTo(-80, -50); g.lineTo(-60, -90); g.lineTo(-35, -50); g.fill();
       g.beginPath(); g.moveTo(80, -50); g.lineTo(60, -90); g.lineTo(35, -50); g.fill();
       g.shadowBlur = 0;
-      g.fillStyle = flashing ? '#222' : (charging ? '#1fe5e0' : '#ff4d6d');
+      g.fillStyle = flashing ? '#222' : (charging ? '#3f9bff' : '#ff4d6d');
       g.fillRect(-50, -20, 28, 18); g.fillRect(22, -20, 28, 18);
       g.fillRect(-30, 20, 60, 8);
       g.restore();
@@ -449,7 +481,9 @@
       // 플레이어 (중앙 고정, 바라보는 방향 표시)
       const blink = t < S.invuln && Math.floor(t * 20) % 2 === 0;
       if (!blink) {
-        g.fillStyle = '#f4f4f4'; g.fillRect(CX - 18, CY - 18, 36, 36);
+        const locked = t < S.lockUntil && S.lockUntil - S.parryAt > 0.3;
+        g.fillStyle = locked ? '#7a7a85' : '#f4f4f4'; g.fillRect(CX - 18, CY - 18, 36, 36);
+        if (locked) { g.fillStyle = '#ff8a8a'; g.fillRect(CX - 18, CY + 24, 36 * Math.min(1, (S.lockUntil - t) / LOCK_MASH), 4); }
         g.save(); g.translate(CX, CY); g.rotate(S.face * Math.PI / 2);
         g.fillStyle = '#17241c'; g.beginPath(); g.moveTo(0, -12); g.lineTo(-9, 7); g.lineTo(9, 7); g.fill();
         g.restore();
@@ -497,8 +531,8 @@
         outlineText('1구간 · 회피/적응', W / 2, 60, '#ddd', 18);
         outlineText('붉은 탄이 오는 쪽으로 방향키 → 박자에 맞춰 SPACE', W / 2, 300, '#ff9aa6', 20);
       } else if (!S.firstParried && t < LEARN_END) {
-        outlineText('2구간 · 패링 학습', W / 2, 190, '#1fe5e0', 18);
-        outlineText('큰 청록 탄 쪽을 보고, 링에 닿을 때 SPACE', W / 2, 300, '#1fe5e0', 22);
+        outlineText('2구간 · 패링 학습', W / 2, 190, '#3f9bff', 18);
+        outlineText('큰 파란 탄 쪽을 보고, 링에 닿을 때 SPACE', W / 2, 300, '#3f9bff', 22);
         outlineText('PERFECT로 막으면 보스에게 반사된다', W / 2, 330, '#ffd34d', 18);
       }
 
@@ -512,7 +546,7 @@
         g.fillStyle = 'rgba(0,0,0,.72)'; g.fillRect(0, 0, W, H);
         if (state === 'title') {
           outlineText('BEAT-PARRY', W / 2, 180, '#ffd34d', 56);
-          const lines = ['공격이 오는 방향을 보고 박자에 맞춰 패링!', '', 'WASD · 방향키 : 바라보는 방향 전환', 'SPACE : 패링', '', 'PERFECT만 보스에게 반사 · GOOD은 막기만', '5초 적응 → 5초 패링 학습 → 보스전 (제한 90초)'];
+          const lines = ['공격이 오는 방향을 보고 박자에 맞춰 패링!', '', 'WASD · 방향키 : 바라보는 방향 전환', 'SPACE : 패링', '', 'PERFECT만 보스에게 반사 · GOOD은 막기만', '5초 적응 → 5초 패링 학습 → 보스전 (제한 120초)'];
           lines.forEach((l, i) => outlineText(l, W / 2, 280 + i * 32, '#fff', 20));
           outlineText('SPACE / ENTER / 클릭으로 시작', W / 2, 580, '#7ff5ff', 26);
         } else {
