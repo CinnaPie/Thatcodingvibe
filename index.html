@@ -3,21 +3,20 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>KING 해커톤 · 배포 확인</title>
+  <title>Beat-Parry · KING 해커톤</title>
   <style>
     * { box-sizing: border-box; }
     body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px; background: #eef1eb; color: #17241c; font-family: system-ui, "Malgun Gothic", sans-serif; }
-    main { width: min(100%, 720px); padding: clamp(24px, 5vw, 48px); border: 1px solid #00462a; border-radius: 8px; background: white; }
-    .label { margin: 0 0 24px; color: #00462a; font-size: 14px; font-weight: 700; }
-    h1 { margin: 0 0 16px; font-size: clamp(28px, 6vw, 42px); }
+    main { width: min(100%, 720px); padding: clamp(16px, 4vw, 40px); border: 1px solid #00462a; border-radius: 8px; background: white; }
+    .label { margin: 0 0 16px; color: #00462a; font-size: 14px; font-weight: 700; }
+    h1 { margin: 0 0 8px; font-size: clamp(26px, 6vw, 38px); }
     p { line-height: 1.7; }
-    #stage { display: grid; place-items: center; min-height: 180px; margin: 28px 0 20px; padding: 24px; background: #f3f5f1; border: 1px solid #d8ded7; text-align: center; }
-    #message { margin: 0; }
-    .buttons { display: flex; flex-wrap: wrap; gap: 12px; }
+    #game { display: block; width: 100%; height: auto; aspect-ratio: 640 / 720; background: #111; border-radius: 4px; cursor: pointer; outline: none; touch-action: none; }
+    .buttons { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 14px; }
     button { padding: 12px 20px; border: 1px solid #00462a; border-radius: 4px; background: #00462a; color: white; font: inherit; cursor: pointer; }
     #restart { background: white; color: #00462a; }
-    button:disabled { opacity: .4; cursor: default; }
     button:focus-visible { outline: 3px solid #69a58c; outline-offset: 4px; }
+    .keys { margin: 10px 0 0; color: #68746b; font-size: 14px; line-height: 1.6; }
     .guide { margin-top: 28px; padding: 24px; border: 1px solid #d8ded7; background: #f8faf6; }
     .guide h2 { margin: 0 0 12px; font-size: 22px; }
     .guide li { margin: 10px 0; line-height: 1.7; }
@@ -29,16 +28,14 @@
 <body>
   <main>
     <p class="label">KING · 바이브코딩 해커톤</p>
-    <!-- 사전 수정 연습: 아래 제목을 원하는 문구로 바꿔 보세요. -->
-    <h1>해커톤 준비 완료</h1>
-    <p>이 화면이 GitHub Pages 공개 주소에서 보이면 배포에 성공한 것입니다.<br>시작 버튼을 눌러 기본 동작도 확인해 주세요.</p>
-    <section id="stage" aria-label="실행 확인 화면" aria-live="polite">
-      <p id="message">시작 버튼을 눌러 주세요.</p>
-    </section>
+    <h1>Beat-Parry</h1>
+    <canvas id="game" tabindex="0" aria-label="Beat-Parry 게임 화면"></canvas>
     <div class="buttons">
       <button id="start" type="button">시작</button>
-      <button id="restart" type="button" disabled>다시 시작</button>
+      <button id="restart" type="button">다시 시작</button>
     </div>
+    <p class="keys">방향 전환: WASD · 방향키 &nbsp;|&nbsp; 패링: Space &nbsp;|&nbsp; 공격이 오는 쪽을 보고 박자에 맞춰 패링! <strong>PERFECT</strong>만 보스에게 반사되고, GOOD은 막기만 합니다.</p>
+
     <section class="guide" aria-labelledby="guide-title">
       <h2 id="guide-title">참가자 정보 사전 입력</h2>
       <p>정기 모임 전에 GitHub와 Skeam 계정을 만들고, 아래 스프레드시트에 본인 정보를 미리 기재해 주세요.</p>
@@ -51,26 +48,506 @@
       <a class="sheet-link" href="https://docs.google.com/spreadsheets/d/1eLqrOtpMhR3VfCOIV-9_RNtlB1wUtHm_m6aK4ziDUH8/edit?usp=sharing" target="_blank" rel="noopener noreferrer">참가자 정보 입력 시트 열기 ↗</a>
       <p style="font-size:14px;color:#68746b">다른 참가자의 행은 수정하지 마세요. 비밀번호·API 키는 기재하지 않습니다. 사전 준비·출석·제출 상태·실행 확인은 운영진이 관리합니다.</p>
     </section>
-    <p class="note">이 파일은 배포 연습용 기본 틀입니다. 실제 게임 규칙과 조작은 당일 추가하세요.<br>사전 연습: 제목을 수정해 다시 올린 뒤 공개 페이지에도 반영되는지 확인합니다.</p>
   </main>
+
   <script>
-    // 외부 라이브러리 없이 이 파일 하나로 실행됩니다.
-    const message = document.getElementById('message');
-    const start = document.getElementById('start');
-    const restart = document.getElementById('restart');
-    start.addEventListener('click', () => {
-      message.textContent = '시작 버튼이 정상적으로 작동합니다. 다시 시작 버튼도 확인해 주세요.';
-      start.disabled = true;
-      restart.disabled = false;
-      restart.focus();
+  // Beat-Parry MVP — 외부 라이브러리 없이 이 파일 하나로 실행됩니다.
+  // 플레이어는 중앙에 고정. 방향키로 4방향을 바라보고, Space로 그 방향을 패링한다.
+  (() => {
+    // ===== 튜닝 상수 =====
+    const W = 640, H = 720;
+    const BPM = 120, SPB = 60 / BPM;          // 한 박 길이(초)
+    const DODGE = 5;                          // 1구간: 회피/적응(초)
+    const LEARN_END = 10;                     // 2구간: 패링 학습(초) — 이후 본편
+    const TOTAL = 90;                         // 전체 제한 시간(초)
+    const MAXHP = 5, BOSSHP = 40;
+    const PERFECT_WIN = 0.10, GOOD_WIN = 0.22, FIRST_WIN = 0.25;
+    const NORMAL_TRAVEL = 1.2, SPECIAL_TRAVEL = 1.6, FIRST_TRAVEL = 3.0, HEAL_TRAVEL = 2.8;
+    const DMG_NORMAL = 1, DMG_SPECIAL = 2;    // PERFECT 반사 시 보스 피해
+    const HEAL_GAP = 18, HEAL_MAX = 3;
+    const HITSTOP = 0.07;
+    const MUSIC_URL = '';                     // 선택: 음악 파일 경로를 넣으면 같은 시계로 재생
+
+    // ===== 레이아웃 =====
+    const CX = W / 2, CY = 430;               // 플레이어(고정)
+    const R0 = 58;                            // 판정 링 반지름 (이 지점 도달 시각 = hitT)
+    const FLIP_R = 150;                       // 반전탄이 방향을 바꾸는 반지름
+    const SPAWN_D = 240;                      // 탄 생성 거리
+    const DIRS = [[0, -1], [1, 0], [0, 1], [-1, 0]];   // 0=위 1=오른쪽 2=아래 3=왼쪽
+    const DIR_NAME = ['↑', '→', '↓', '←'];
+    const BOSS_X = W / 2;
+    const FONT = '"Malgun Gothic", system-ui, sans-serif';
+
+    // 고정 패턴(랜덤 생성 없음)
+    const ADV_DIRS = [0, 1, 3, 2];
+    const SP_DIRS = [0, 3, 1, 2, 1, 0, 3, 2, 0, 1, 2, 3, 3, 1];
+    const N_DIRS = [2, 1, 3, 0, 3, 2, 0, 1, 2, 0, 1, 3, 2, 3];
+
+    const cv = document.getElementById('game');
+    const g = cv.getContext('2d');
+    cv.width = W; cv.height = H;
+
+    // ===== 시계 (AudioContext = DSP 시계. 히트스톱 중에는 게임 시계만 멈춘다) =====
+    let AC = null, music = null;
+    try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { console.warn('AudioContext 사용 불가: performance.now 로 대체', e); }
+    const realTime = () => AC ? AC.currentTime : performance.now() / 1000;
+    let offset = 0, lastReal = 0, hitstopEnd = 0, lastNow = 0, endReal = 0;
+    const now = () => realTime() - offset;
+
+    let state = 'title';          // title | play | win | lose
+    let endReason = '';
+    let S;
+
+    function buildSchedule() {
+      const list = [];
+      // 1구간: 회피/적응 — 붉은 일반탄만
+      ADV_DIRS.forEach((d, i) => {
+        const sp = 0.8 + i * 0.8;
+        list.push({ kind: 'n', dir: d, spawnT: sp, hitT: sp + NORMAL_TRAVEL });
+      });
+      // 2구간: 첫 특수탄(느림) + 중간 일반탄. 이후 패턴은 보스 HP에 따라 genPattern 이 이어 붙인다.
+      const hit = Math.round(8 / SPB) * SPB;
+      list.push({ kind: 's', dir: SP_DIRS[0], spawnT: hit - FIRST_TRAVEL, hitT: hit, first: true });
+      const n1 = hit + 2 * SPB;
+      list.push({ kind: 'n', dir: N_DIRS[0], spawnT: n1 - NORMAL_TRAVEL, hitT: n1 });
+      return { list: list.sort((a, b) => a.spawnT - b.spawnT), nextBase: hit + 4 * SPB };
+    }
+
+    // ===== 보스 HP 기반 페이즈 =====
+    // 1: HP 2/3 초과 / 2: 1/3 초과 / 3: 그 이하. 페이즈가 오를수록 탄이 빨라지고 새 패턴이 추가된다.
+    const phaseOf = hp => hp > BOSSHP * 2 / 3 ? 1 : hp > BOSSHP / 3 ? 2 : 3;
+    const PHASE_NAME = ['', '', 'PHASE 2 · 가속!', 'PHASE 3 · 폭주!'];
+    const mod4 = x => ((x % 4) + 4) % 4;
+
+    function ev(kind, dir, beat, travel, extra) {   // 현재 패턴 기준 beat 박 뒤에 닿는 탄 예약
+      const hitT = S.nextBase + beat * SPB;
+      S.pending.push(Object.assign({ kind, dir: mod4(dir), spawnT: hitT - travel, hitT }, extra, extra && extra.flip ? { from: mod4(extra.from) } : null));
+    }
+
+    function genPattern() {
+      const ph = phaseOf(S.bossHp), k = S.gc++;
+      const d = SP_DIRS[k % SP_DIRS.length], dn = N_DIRS[k % N_DIRS.length];
+      const nt = [0, 1.2, 1.05, 0.9][ph], st = [0, 1.6, 1.4, 1.2][ph];
+      let len = 4;
+      if (ph === 1) {                              // 기본: 특수탄 + 중간 일반탄, 4번째마다 휴식
+        ev('s', d, 0, st); ev('n', dn, 2, nt);
+        if (k % 4 === 3) { ev('n', N_DIRS[(k + 5) % N_DIRS.length], 6, nt); len = 8; }
+      } else if (ph === 2) {
+        const v = S.p2++ % 4;
+        if (v === 0) { ev('n', d, 0, nt); ev('n', d + 2, 1, nt); ev('s', dn, 3, st); }                       // 양방향 쌍탄
+        else if (v === 1) { ev('n', d, 0, nt); ev('n', d + 1, 1, nt); ev('n', d + 2, 2, nt); ev('s', dn, 4, st); len = 6; }  // 회전 연타
+        else if (v === 2) { ev('s', d, 0, st); ev('n', dn, 1.5, nt); ev('n', dn + 2, 2.5, nt); }             // 특수탄 뒤 급습
+        else { ev('s', d, 0, 2.2, { ease: true }); ev('n', dn, 2, nt); ev('n', dn + 2, 3, nt); }              // 페인트(보라: 느리다가 막판에 가속)
+      } else {
+        const v = S.p3++ % 4;
+        if (v === 0) { for (let i = 0; i < 4; i++) ev('n', d + i, i, nt); ev('s', dn, 5, st); len = 6; }     // 소용돌이
+        else if (v === 1) { ev('n', d + 2, 0, 1.8, { flip: true, from: d }); ev('s', dn, 2, st); ev('n', dn + 2, 3, nt); } // 반전탄(주황: 돌아서 반대편에서 옴)
+        else if (v === 2) { ev('s', d, 0, st); ev('s', d + 1, 1.5, st); ev('n', dn, 3, nt); }                // 더블 특수탄
+        else { ev('n', d, 0, nt); ev('n', d + 2, 1, nt); ev('n', d + 1, 2, nt); ev('n', d + 3, 3, nt); ev('s', dn + 2, 5, 1.8, { flip: true, from: dn }); len = 6; } // 지그재그 + 반전 특수탄
+      }
+      if (ph !== S.genPhase) { S.genPhase = ph; S.nextBase += 2 * SPB; }      // 페이즈가 바뀌면 숨 돌릴 틈
+      S.nextBase += len * SPB;
+      S.pending.sort((a, b) => a.spawnT - b.spawnT);
+    }
+
+    function reset() {
+      const sch = buildSchedule();
+      S = {
+        hp: MAXHP, bossHp: BOSSHP, combo: 0, maxCombo: 0, perfects: 0, goods: 0,
+        face: 0, invuln: 0, parryAt: -9, lastPress: -9,
+        bullets: [], texts: [], parts: [], pending: sch.list, nextBase: sch.nextBase,
+        gc: 1, p2: 0, p3: 0, genPhase: 1, phaseShown: 1,
+        flash: 0, shake: 0, bossFlashUntil: 0, redFlash: 0, scroll: 0,
+        healCount: 0, lastHeal: -99, firstParried: false, lastBeat: -1, endT: 0
+      };
+    }
+
+    function begin() {
+      reset();
+      if (AC) AC.resume();
+      offset = realTime(); lastReal = offset; hitstopEnd = 0; lastNow = 0;
+      state = 'play';
+      if (music && AC) { const src = AC.createBufferSource(); src.buffer = music; src.connect(AC.destination); src.start(offset); }
+      cv.focus();
+    }
+    async function start() {
+      if (AC) AC.resume();
+      if (MUSIC_URL && !music && AC) {
+        try { music = await AC.decodeAudioData(await (await fetch(MUSIC_URL)).arrayBuffer()); }
+        catch (e) { console.warn('음악 로드 실패, 음악 없이 진행합니다', e); }
+      }
+      begin();
+    }
+
+    // ===== 효과음 =====
+    function tone(f, d = 0.1, type = 'sine', v = 0.08, slide = 0) {
+      if (!AC) return;
+      const t0 = AC.currentTime, o = AC.createOscillator(), gn = AC.createGain();
+      o.type = type; o.frequency.setValueAtTime(f, t0);
+      if (slide) o.frequency.linearRampToValueAtTime(f + slide, t0 + d);
+      gn.gain.setValueAtTime(v, t0); gn.gain.exponentialRampToValueAtTime(0.0001, t0 + d);
+      o.connect(gn); gn.connect(AC.destination); o.start(t0); o.stop(t0 + d);
+    }
+
+    // ===== 입력 =====
+    const FACE_KEYS = { KeyW: 0, ArrowUp: 0, KeyD: 1, ArrowRight: 1, KeyS: 2, ArrowDown: 2, KeyA: 3, ArrowLeft: 3 };
+    addEventListener('keydown', e => {
+      const k = e.code;
+      if (state !== 'win' && state !== 'lose' && (k === 'Space' || k in FACE_KEYS)) e.preventDefault();
+      if (e.repeat) return;
+      if (state === 'title') { if (k === 'Space' || k === 'Enter') start(); return; }
+      if (state === 'play') {
+        if (k in FACE_KEYS) S.face = FACE_KEYS[k];
+        else if (k === 'Space') parry();
+        return;
+      }
+      if ((k === 'Enter' || k === 'KeyR') && realTime() - endReal > 0.7) start();
     });
-    restart.addEventListener('click', () => {
-      message.textContent = '시작 버튼을 눌러 주세요.';
-      start.disabled = false;
-      restart.disabled = true;
-      start.focus();
-    });
+    cv.addEventListener('pointerdown', () => { if (state === 'title' || ((state === 'win' || state === 'lose') && realTime() - endReal > 0.7)) start(); cv.focus(); });
+    document.getElementById('start').addEventListener('click', start);
+    document.getElementById('restart').addEventListener('click', start);
+
+    // ===== 유틸 =====
+    const bossScale = t => t < DODGE ? 0.3 : Math.min(1, 0.3 + 0.7 * (t - DODGE));
+    const bossY = t => 75 + 30 * (bossScale(t) - 0.3) / 0.7;
+    function placeBullet(b, t) {
+      let u = (t - b.spawnT) / (b.hitT - b.spawnT);
+      if (b.ease) u = u <= 0.6 ? 0.3 * (u / 0.6) : 0.3 + 0.7 * (u - 0.6) / 0.4;   // 페인트: 느리게 오다가 막판에 가속
+      if (b.flip) {                                // 반전탄: 오다가 반 바퀴를 돌아 반대편에서 들어온다
+        const a0 = Math.atan2(DIRS[b.from][1], DIRS[b.from][0]);
+        let r, a = a0;
+        if (u < 0.45) r = SPAWN_D - (SPAWN_D - FLIP_R) * (u / 0.45);
+        else if (u < 0.65) { r = FLIP_R; a = a0 + Math.PI * (u - 0.45) / 0.2; }
+        else { r = FLIP_R - (FLIP_R - R0) * (u - 0.65) / 0.35; a = a0 + Math.PI; }
+        r = Math.max(0, r);
+        b.x = CX + Math.cos(a) * r; b.y = CY + Math.sin(a) * r;
+        return;
+      }
+      const r = Math.max(0, SPAWN_D - (SPAWN_D - R0) * u);
+      b.x = CX + DIRS[b.dir][0] * r; b.y = CY + DIRS[b.dir][1] * r;
+    }
+    function addText(txt, x, y, color, size, dur, t) { S.texts.push({ txt, x, y, color, size, t0: t, dur }); }
+    function burst(x, y, color, n, t) {
+      for (let i = 0; i < n; i++) {
+        const a = Math.random() * Math.PI * 2, sp = 80 + Math.random() * 260;
+        S.parts.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, t0: t, life: 0.4 + Math.random() * 0.3, color });
+      }
+    }
+
+    function hurt(t, msg) {
+      S.combo = 0;
+      S.hp--;
+      S.invuln = t + 0.5; S.shake = 8; S.redFlash = 0.6;
+      addText(msg, CX, CY + 110, '#ff6b6b', 28, 0.7, t);
+      tone(110, 0.25, 'sawtooth', 0.12, -60);
+      if (S.hp <= 0) endGame('lose', 'HP가 0이 되었습니다', t);
+    }
+
+    function endGame(result, reason, t) {
+      if (state !== 'play') return;
+      state = result; endReason = reason; S.endT = t; endReal = realTime();
+      tone(result === 'win' ? 880 : 90, 0.6, result === 'win' ? 'triangle' : 'sawtooth', 0.12, result === 'win' ? 440 : -40);
+    }
+
+    // ===== 패링 (바라보는 방향의 공격만 막을 수 있다. PERFECT만 보스에게 반사) =====
+    function parry() {
+      const t = now();
+      if (t - S.lastPress < 0.25) return;          // 연타 방지
+      S.lastPress = t; S.parryAt = t;
+      let best = null, bestD = 9;
+      for (const b of S.bullets) {
+        if (b.state !== 'fly' || b.dir !== S.face) continue;
+        const d = Math.abs(t - b.hitT);
+        if (d <= (b.first ? FIRST_WIN : GOOD_WIN) && d < bestD) { best = b; bestD = d; }
+      }
+      if (best) {
+        const b = best, py = CY + DIRS[b.dir][1] * R0, px = CX + DIRS[b.dir][0] * R0;
+        if (b.kind === 'h') {                       // 회복 탄: 튕겨 사라지고 회복되지 않는다
+          b.state = 'done'; burst(px, py, '#7dff9a', 8, t);
+          addText('BLOCKED', CX, CY + 110, '#9bd6a8', 22, 0.5, t); tone(300, 0.1, 'square', 0.06);
+          return;
+        }
+        const perfect = bestD <= (b.first ? FIRST_WIN : PERFECT_WIN);
+        if (perfect) {
+          b.state = 'reflect'; b.rt0 = t; b.rx0 = b.x; b.ry0 = b.y; b.dmg = b.kind === 's' ? DMG_SPECIAL : DMG_NORMAL;
+          S.firstParried = true;
+          S.perfects++; S.combo++; S.maxCombo = Math.max(S.maxCombo, S.combo);
+          S.flash = 0.7; S.shake = 12; hitstopEnd = realTime() + HITSTOP;
+          burst(px, py, '#ffd34d', 28, t);
+          addText('PERFECT!', CX, CY + 110, '#ffd34d', 54, 0.8, t);
+          tone(1320, 0.18, 'triangle', 0.12); tone(1760, 0.25, 'sine', 0.08);
+        } else {                                    // GOOD: 막기만 하고 보스 피해 없음
+          b.state = 'done'; S.goods++; S.combo = 0; S.shake = 3; S.firstParried = true;
+          burst(px, py, '#7ff5ff', 10, t);
+          addText('GOOD (막기만)', CX, CY + 110, '#7ff5ff', 30, 0.7, t);
+          tone(700, 0.12, 'triangle', 0.09);
+        }
+        return;
+      }
+      // 너무 일찍 눌렀을 때
+      for (const b of S.bullets) {
+        if (b.state === 'fly' && b.dir === S.face && b.kind !== 'h' && b.hitT - t > GOOD_WIN && b.hitT - t < 0.7) {
+          addText('EARLY', CX, CY + 110, '#ffb36b', 24, 0.5, t); tone(200, 0.08, 'square', 0.05); return;
+        }
+      }
+      tone(500, 0.05, 'sine', 0.03);               // 헛스윙
+    }
+
+    // ===== 업데이트 =====
+    function update(t, dt) {
+      if (t < DODGE) S.scroll += 300 * dt;          // 1구간만 전진 연출
+
+      // 보스 HP 기준으로 다음 패턴 이어 붙이기 / 페이즈 전환 연출
+      if (t >= DODGE) {
+        while (S.nextBase < TOTAL - 1 && S.nextBase - 2.5 <= t) genPattern();
+        const ph = phaseOf(S.bossHp);
+        if (ph > S.phaseShown) {
+          S.phaseShown = ph; S.flash = Math.max(S.flash, 0.4); S.shake = 10;
+          addText(PHASE_NAME[ph], W / 2, 250, ph === 2 ? '#ffb36b' : '#ff5a5a', 44, 1.6, t);
+          tone(110, 0.5, 'sawtooth', 0.12, 220);
+        }
+      }
+
+      // 예약된 탄 생성
+      while (S.pending.length && S.pending[0].spawnT <= t) {
+        const p = S.pending.shift();
+        const b = { kind: p.kind, dir: p.dir, spawnT: p.spawnT, hitT: p.hitT, first: !!p.first, ease: !!p.ease, flip: !!p.flip, from: p.from, state: 'fly', x: CX, y: CY };
+        placeBullet(b, t); S.bullets.push(b);
+      }
+
+      // 회복 탄 (HP < 5, 최소 18초 간격, 최대 3개, 동시 1개)
+      if (S.hp < MAXHP && S.healCount < HEAL_MAX && t - S.lastHeal >= HEAL_GAP && t > LEARN_END && t < TOTAL - 6 &&
+          !S.bullets.some(b => b.kind === 'h' && b.state === 'fly')) {
+        const opts = [0, 1, 2, 3].filter(d => d !== S.face);
+        const b = { kind: 'h', dir: opts[Math.floor(Math.random() * opts.length)], spawnT: t, hitT: t + HEAL_TRAVEL, state: 'fly', x: CX, y: CY };
+        placeBullet(b, t); S.bullets.push(b);
+        S.healCount++; S.lastHeal = t;
+      }
+
+      // 탄 갱신
+      for (const b of S.bullets) {
+        if (b.state === 'done') continue;
+        if (b.state === 'reflect') {
+          const k = (t - b.rt0) / 0.35, by = bossY(t) + 20;
+          if (k >= 1) {
+            b.state = 'done';
+            S.bossHp = Math.max(0, S.bossHp - b.dmg);
+            S.bossFlashUntil = t + 0.18; S.shake = Math.max(S.shake, 6);
+            burst(BOSS_X, by, '#ffffff', 16, t);
+            addText('-' + b.dmg, BOSS_X + 70, by, b.dmg === 2 ? '#ffd34d' : '#7ff5ff', 34, 0.7, t);
+            tone(160, 0.2, 'square', 0.1, -50);
+            if (S.bossHp <= 0) endGame('win', '보스를 쓰러뜨렸습니다!', t);
+          } else { b.x = b.rx0 + (BOSS_X - b.rx0) * k; b.y = b.ry0 + (by - b.ry0) * k; }
+          continue;
+        }
+        placeBullet(b, t);
+        if (b.kind === 'h') {
+          if (t >= b.hitT) {                        // 패링하지 않으면 접촉 → 회복
+            b.state = 'done';
+            if (S.hp < MAXHP) { S.hp++; addText('+1 HP', CX, CY + 110, '#7dff9a', 28, 0.7, t); tone(660, 0.15, 'sine', 0.1, 330); burst(CX, CY, '#7dff9a', 10, t); }
+          }
+        } else if (t > b.hitT + (b.first ? FIRST_WIN : GOOD_WIN)) {   // 패링 실패 → 피격
+          b.state = 'done';
+          if (t >= S.invuln) hurt(t, 'MISS'); else addText('MISS', CX, CY + 110, '#ff6b6b', 26, 0.7, t);
+        }
+      }
+      S.bullets = S.bullets.filter(b => b.state !== 'done');
+
+      // 박자 틱
+      const beat = Math.floor(t / SPB);
+      if (beat !== S.lastBeat) { S.lastBeat = beat; if (t >= DODGE) tone(beat % 4 === 0 ? 220 : 160, 0.05, 'square', beat % 4 === 0 ? 0.05 : 0.025); }
+
+      S.shake *= Math.pow(0.001, dt); if (S.shake < 0.3) S.shake = 0;
+      S.flash = Math.max(0, S.flash - dt * 3);
+      S.redFlash = Math.max(0, S.redFlash - dt * 2.5);
+
+      if (state === 'play' && t >= TOTAL) endGame('lose', '제한 시간 초과', t);
+    }
+
+    // ===== 그리기 =====
+    function heart(x, y, on) { g.fillStyle = on ? '#ff4d6d' : '#3a3a3a'; g.fillRect(x, y, 18, 18); }
+    function outlineText(txt, x, y, color, size, align = 'center') {
+      g.font = `bold ${size}px ${FONT}`; g.textAlign = align; g.textBaseline = 'middle';
+      g.lineWidth = 4; g.strokeStyle = 'rgba(0,0,0,.75)'; g.strokeText(txt, x, y);
+      g.fillStyle = color; g.fillText(txt, x, y);
+    }
+
+    function drawBullet(b, t) {
+      g.save(); g.translate(b.x, b.y);
+      if (b.kind === 'n') {                       // 붉은 마름모
+        g.rotate(Math.PI / 4); g.fillStyle = b.flip ? '#ff9a2e' : '#ff2f45'; g.fillRect(-12, -12, 24, 24);
+        g.strokeStyle = b.flip ? '#ffe0b3' : '#ffc3c9'; g.lineWidth = 2; g.strokeRect(-12, -12, 24, 24);
+      } else if (b.kind === 's') {                // 청록 큰 원 + 금색 링
+        const reflect = b.state === 'reflect';
+        const col = b.flip ? '#ff9a2e' : b.ease ? '#c77dff' : '#1fe5e0';   // 반전탄 주황 / 페인트 보라
+        g.fillStyle = reflect ? '#ffe27a' : col; g.shadowColor = reflect ? '#ffd34d' : col; g.shadowBlur = 18;
+        g.beginPath(); g.arc(0, 0, 22, 0, 7); g.fill();
+        g.shadowBlur = 0; g.strokeStyle = '#ffd34d'; g.lineWidth = 4 + 2 * Math.sin(t * 12);
+        g.beginPath(); g.arc(0, 0, 27, 0, 7); g.stroke();
+      } else {                                    // 초록 십자 오브
+        g.fillStyle = '#35d06a'; g.shadowColor = '#35d06a'; g.shadowBlur = 12;
+        g.beginPath(); g.arc(0, 0, 13, 0, 7); g.fill(); g.shadowBlur = 0;
+        g.fillStyle = '#eafff0'; g.fillRect(-2.5, -8, 5, 16); g.fillRect(-8, -2.5, 16, 5);
+      }
+      g.restore();
+    }
+
+    function draw(t) {
+      g.save();
+      if (S.shake) g.translate((Math.random() - .5) * S.shake * 2, (Math.random() - .5) * S.shake * 2);
+
+      // 배경 + 전진하는 도로
+      g.fillStyle = '#12131c'; g.fillRect(-20, -20, W + 40, H + 40);
+      g.fillStyle = '#242636'; g.fillRect(CX - 70, 0, 140, H);
+      g.fillStyle = '#3b3e57'; g.fillRect(CX - 74, 0, 4, H); g.fillRect(CX + 70, 0, 4, H);
+      g.strokeStyle = '#4b4f70'; g.lineWidth = 4; g.setLineDash([30, 30]); g.lineDashOffset = -S.scroll;
+      g.beginPath(); g.moveTo(CX, 0); g.lineTo(CX, H); g.stroke(); g.setLineDash([]);
+      // 4방향 가이드
+      g.strokeStyle = 'rgba(255,255,255,.08)'; g.lineWidth = 2;
+      g.beginPath(); g.moveTo(0, CY); g.lineTo(W, CY); g.stroke();
+
+      // 공격 예고: 오는 방향에 화살표와 선
+      let charging = false;
+      for (const p of S.pending) {
+        const lead = p.spawnT - t, lim = p.kind === 's' || p.flip ? 1.0 : 0.7;
+        if (lead > lim) continue;
+        if (p.kind === 's') charging = true;
+        const sd = p.flip ? p.from : p.dir;        // 반전탄은 처음 오는 쪽에 예고, 반대편엔 흐린 화살표
+        if (p.flip) outlineText(DIR_NAME[p.dir], CX + DIRS[p.dir][0] * (SPAWN_D - 26), CY + DIRS[p.dir][1] * (SPAWN_D - 26), 'rgba(255,154,46,.35)', 30);
+        const dx = DIRS[sd][0], dy = DIRS[sd][1];
+        const sx = CX + dx * SPAWN_D, sy = CY + dy * SPAWN_D;
+        const col = p.flip ? '255,154,46' : p.kind === 's' ? '31,229,224' : '255,70,90';
+        g.strokeStyle = `rgba(${col},${0.45 + 0.4 * Math.sin(t * 30)})`; g.lineWidth = p.kind === 's' ? 5 : 3;
+        if (p.kind === 's') g.setLineDash([10, 8]);
+        g.beginPath(); g.moveTo(sx, sy); g.lineTo(CX + dx * R0, CY + dy * R0); g.stroke(); g.setLineDash([]);
+        outlineText(DIR_NAME[sd], sx - dx * 26, sy - dy * 26, p.flip ? '#ff9a2e' : p.kind === 's' ? '#1fe5e0' : '#ff6b7e', 30);
+      }
+
+      // 보스
+      const sc = bossScale(t), by = bossY(t), bossPhase = t >= DODGE;
+      const pulse = bossPhase ? 1 + 0.04 * (1 - ((t / SPB) % 1)) : 1;
+      const flashing = t < S.bossFlashUntil;
+      g.save(); g.translate(BOSS_X, by); g.scale(sc * pulse, sc * pulse);
+      if (charging && bossPhase) { g.shadowColor = '#1fe5e0'; g.shadowBlur = 30; }
+      g.fillStyle = flashing ? '#ffffff' : (bossPhase ? ['', '#5a2a8a', '#8a2a6a', '#9a1f2a'][phaseOf(S.bossHp)] : '#2a2140');
+      g.fillRect(-80, -50, 160, 100);
+      g.beginPath(); g.moveTo(-80, -50); g.lineTo(-60, -90); g.lineTo(-35, -50); g.fill();
+      g.beginPath(); g.moveTo(80, -50); g.lineTo(60, -90); g.lineTo(35, -50); g.fill();
+      g.shadowBlur = 0;
+      g.fillStyle = flashing ? '#222' : (charging ? '#1fe5e0' : '#ff4d6d');
+      g.fillRect(-50, -20, 28, 18); g.fillRect(22, -20, 28, 18);
+      g.fillRect(-30, 20, 60, 8);
+      g.restore();
+
+      // 판정 링 (이 위치에 탄이 닿는 순간이 박자)
+      g.strokeStyle = 'rgba(255,255,255,.28)'; g.lineWidth = 2; g.setLineDash([5, 7]);
+      g.beginPath(); g.arc(CX, CY, R0, 0, 7); g.stroke(); g.setLineDash([]);
+
+      // 탄
+      for (const b of S.bullets) drawBullet(b, t);
+
+      // 플레이어 (중앙 고정, 바라보는 방향 표시)
+      const blink = t < S.invuln && Math.floor(t * 20) % 2 === 0;
+      if (!blink) {
+        g.fillStyle = '#f4f4f4'; g.fillRect(CX - 18, CY - 18, 36, 36);
+        g.save(); g.translate(CX, CY); g.rotate(S.face * Math.PI / 2);
+        g.fillStyle = '#17241c'; g.beginPath(); g.moveTo(0, -12); g.lineTo(-9, 7); g.lineTo(9, 7); g.fill();
+        g.restore();
+      }
+      // 바라보는 방향 표시
+      g.fillStyle = '#ffd34d';
+      g.save(); g.translate(CX + DIRS[S.face][0] * (R0 + 14), CY + DIRS[S.face][1] * (R0 + 14)); g.rotate(S.face * Math.PI / 2);
+      g.beginPath(); g.moveTo(0, -8); g.lineTo(-7, 6); g.lineTo(7, 6); g.fill(); g.restore();
+      // 패링 호
+      const pa = t - S.parryAt;
+      if (pa >= 0 && pa < 0.18) {
+        const ang = Math.atan2(DIRS[S.face][1], DIRS[S.face][0]);
+        g.strokeStyle = `rgba(255,255,255,${1 - pa / 0.18})`; g.lineWidth = 9; g.lineCap = 'round';
+        g.beginPath(); g.arc(CX, CY, R0 - 4 + pa * 50, ang - 0.8, ang + 0.8); g.stroke(); g.lineCap = 'butt';
+      }
+
+      // 파티클 / 텍스트
+      for (const p of S.parts) {
+        const a = t - p.t0; if (a > p.life) continue;
+        g.globalAlpha = 1 - a / p.life; g.fillStyle = p.color;
+        g.fillRect(p.x + p.vx * a - 3, p.y + p.vy * a - 3, 6, 6);
+      }
+      g.globalAlpha = 1;
+      S.parts = S.parts.filter(p => t - p.t0 <= p.life);
+      for (const x of S.texts) {
+        const a = (t - x.t0) / x.dur; if (a > 1) continue;
+        g.globalAlpha = 1 - a * a; outlineText(x.txt, x.x, x.y - a * 30, x.color, x.size);
+      }
+      g.globalAlpha = 1;
+      S.texts = S.texts.filter(x => t - x.t0 <= x.dur);
+
+      // HUD
+      for (let i = 0; i < MAXHP; i++) heart(14 + i * 24, 14, i < S.hp);
+      const remain = Math.max(0, TOTAL - t);
+      outlineText(remain.toFixed(1) + 's', W / 2, 24, remain < 15 ? '#ff6b6b' : '#ffffff', 24);
+      if (S.combo > 0) outlineText('PERFECT x' + S.combo, W - 14, 24, '#ffd34d', 20, 'right');
+      if (bossPhase) {
+        g.fillStyle = '#000a'; g.fillRect(120, 46, 400, 14);
+        g.fillStyle = '#ff4d6d'; g.fillRect(122, 48, 396 * S.bossHp / BOSSHP, 10);
+        outlineText('BOSS ' + S.bossHp + '/' + BOSSHP + ' · PHASE ' + phaseOf(S.bossHp), W / 2, 74, '#fff', 14);
+        if (S.firstParried) outlineText('PERFECT만 보스에게 반사!', W / 2, H - 22, '#9fdfe0', 16);
+      }
+      // 구간 안내
+      if (t < DODGE) {
+        outlineText('1구간 · 회피/적응', W / 2, 60, '#ddd', 18);
+        outlineText('붉은 탄이 오는 쪽으로 방향키 → 박자에 맞춰 SPACE', W / 2, 300, '#ff9aa6', 20);
+      } else if (!S.firstParried && t < LEARN_END) {
+        outlineText('2구간 · 패링 학습', W / 2, 190, '#1fe5e0', 18);
+        outlineText('큰 청록 탄 쪽을 보고, 링에 닿을 때 SPACE', W / 2, 300, '#1fe5e0', 22);
+        outlineText('PERFECT로 막으면 보스에게 반사된다', W / 2, 330, '#ffd34d', 18);
+      }
+
+      // 화면 효과
+      if (S.flash > 0) { g.fillStyle = `rgba(255,255,255,${S.flash})`; g.fillRect(-20, -20, W + 40, H + 40); }
+      if (S.redFlash > 0) { g.fillStyle = `rgba(255,30,50,${S.redFlash * 0.4})`; g.fillRect(-20, -20, W + 40, H + 40); }
+      g.restore();
+
+      // 오버레이
+      if (state !== 'play') {
+        g.fillStyle = 'rgba(0,0,0,.72)'; g.fillRect(0, 0, W, H);
+        if (state === 'title') {
+          outlineText('BEAT-PARRY', W / 2, 180, '#ffd34d', 56);
+          const lines = ['공격이 오는 방향을 보고 박자에 맞춰 패링!', '', 'WASD · 방향키 : 바라보는 방향 전환', 'SPACE : 패링', '', 'PERFECT만 보스에게 반사 · GOOD은 막기만', '5초 적응 → 5초 패링 학습 → 보스전 (제한 90초)'];
+          lines.forEach((l, i) => outlineText(l, W / 2, 280 + i * 32, '#fff', 20));
+          outlineText('SPACE / ENTER / 클릭으로 시작', W / 2, 580, '#7ff5ff', 26);
+        } else {
+          outlineText(state === 'win' ? 'VICTORY' : 'DEFEAT', W / 2, 200, state === 'win' ? '#ffd34d' : '#ff6b6b', 64);
+          outlineText(endReason, W / 2, 270, '#fff', 22);
+          outlineText(`PERFECT ${S.perfects} · GOOD ${S.goods} · 최대 콤보 ${S.maxCombo}`, W / 2, 330, '#fff', 20);
+          outlineText(`남은 보스 HP ${S.bossHp}/${BOSSHP}`, W / 2, 365, '#ccc', 18);
+          outlineText('ENTER / R / 클릭으로 다시 시작', W / 2, 500, '#7ff5ff', 24);
+        }
+      }
+    }
+
+    // ===== 메인 루프 =====
+    function frame() {
+      requestAnimationFrame(frame);
+      const real = realTime();
+      let t = S.endT;
+      if (state === 'play') {
+        const dReal = real - lastReal;
+        if (real < hitstopEnd || dReal > 0.25) offset += dReal;   // 히트스톱 / 탭 전환 시 게임 시계 정지
+        lastReal = real;
+        t = now();
+        const dt = Math.min(0.05, Math.max(0, t - lastNow));
+        lastNow = t;
+        update(t, dt);
+        if (state !== 'play') t = S.endT;
+      }
+      draw(t);
+    }
+    reset();
+    requestAnimationFrame(frame);
+
+    // 테스트/디버그용 접근점
+    window.__beatParry = { get S() { return S; }, get state() { return state; }, now, start };
+  })();
   </script>
 </body>
 </html>
-
